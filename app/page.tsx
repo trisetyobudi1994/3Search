@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence, useMotionValue, useSpring, useTransform } from "framer-motion";
 import { Radar, ArrowLeft, Sparkles, Github } from "lucide-react";
+import Link from "next/link";
 import SearchBar from "@/components/SearchBar";
 import FunnelAnimation from "@/components/FunnelAnimation";
 import ProductCard from "@/components/ProductCard";
@@ -72,15 +73,23 @@ export default function Home() {
           </div>
           <span className="text-sm font-semibold text-zinc-900">3Search</span>
         </button>
-        <a
-          href="https://github.com/trisetyobudi1994/3Search"
-          target="_blank"
-          rel="noreferrer"
-          className="flex items-center gap-1.5 text-xs text-zinc-500 hover:text-zinc-900"
-        >
-          <Github className="h-4 w-4" />
-          <span className="hidden sm:inline">GitHub</span>
-        </a>
+        <div className="flex items-center gap-4">
+          <Link
+            href="/stats"
+            className="text-xs font-medium text-zinc-600 hover:text-violet-600 transition-colors"
+          >
+            Hit Rate
+          </Link>
+          <a
+            href="https://github.com/trisetyobudi1994/3Search"
+            target="_blank"
+            rel="noreferrer"
+            className="flex items-center gap-1.5 text-xs text-zinc-500 hover:text-zinc-900"
+          >
+            <Github className="h-4 w-4" />
+            <span className="hidden sm:inline">GitHub</span>
+          </a>
+        </div>
       </nav>
 
       <div className="relative z-10 mx-auto max-w-6xl px-6">

@@ -1,31 +1,33 @@
-import type { FunnelResult } from "./types";
-import { PRODUCT_POOL } from "./mock-data";
+import { ApifyClient } from "apify-client";
 
-export async function analyze(query: string): Promise<FunnelResult> {
-  try {
-    const res = await fetch("/api/analyze", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ query, region: "ID" }),
-    });
+const client = new ApifyClient({ token: process.env.APIFY_TOKEN });
+const ACTOR_ID = process.env.APIFY_ACTOR || "herus13/tiktok-shop-scraper";
 
-    if (!res.ok) throw new Error("API gagal");
-
-    const data = (await res.json()) as FunnelResult;
-    if (!data.products?.length) throw new Error("Data kosong");
-    return data;
-  } catch (err) {
-    console.warn("Fallback ke mock:", err);
-
-    const q = query.toLowerCase().trim();
-    let products = PRODUCT_POOL.fallback;
-    if (q.includes("skincare") || q.includes("kulit") || q.includes("serum"))
-      products = PRODUCT_POOL.skincare;
-    else if (q.includes("gadget") || q.includes("elektronik") || q.includes("tws"))
-      products = PRODUCT_POOL.gadget;
-    else if (q.includes("fashion") || q.includes("baju") || q.includes("pakaian"))
-      products = PRODUCT_POOL.fashion;
-
-    return { query, stage1: 100, stage2: 50, stage3: 10, stage4: 3, products };
+export async function fetchTikTokProducts(
+  keyword: string,
+  region = "ID",
+  maxItems = 100
+): Promise<any[]> {
+  if (!process.env.APIFY_TOKEN) {
+    throw new Error("APIFY_TOKEN belum diset");
   }
+  
+  // Schema untuk herus13 biasanya: keyword, region, maxItems
+  const input = { 
+    keyword: keyword, 
+    region: region, 
+    maxItems: maxItems 
+  };
+  
+  const run = await client.actor(ACTOR_ID).call(input, { timeout: 50 });
+  
+  if (run.status !== 'SUCCEEDED') {
+    throw new Error(`Apify gagal: ${run.status}`);
+  }
+
+  const { items } = await client
+    .dataset(run.defaultDatasetId)
+    .listItems({ limit: maxItems });
+    
+  return items;
 }

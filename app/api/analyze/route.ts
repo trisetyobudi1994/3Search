@@ -8,7 +8,7 @@ import type { Product, FunnelResult } from "@/lib/types";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-function toNumber(v: unknown): number {
+function toNumber(v: any): number {
   if (typeof v === "number") return v;
   if (typeof v === "string") {
     const clean = v.replace(/[^\d.]/g, "");
@@ -17,68 +17,63 @@ function toNumber(v: unknown): number {
   return 0;
 }
 
-function normalizePrice(v: unknown): number {
-  const n = toNumber(v);
-  return n > 100000 ? Math.round(n / 100) : n;
-}
-
-function scoreProduct(p: { sold: number; rating: number; review: number; price: number }): number {
-  const soldScore = Math.min(40, Math.log10(p.sold + 1) * 10);
-  const ratingScore = Math.min(30, (p.rating / 5) * 30);
-  const reviewScore = Math.min(20, Math.log10(p.review + 1) * 5);
-  const priceScore = p.price > 0 && p.price < 500000 ? 10 : 5;
-  return Math.round(soldScore + ratingScore + reviewScore + priceScore);
-}
-
-function confidenceFromScore(score: number): Product["confidence"] {
-  if (score >= 75) return "high";
-  if (score >= 60) return "medium";
-  return "low";
-}
-
+// 👇 FUNGSI MAPPING BARU SESUAI JSON ASLI APIFY 👇
 function mapToProduct(raw: any, index: number): Product {
-  const sold = toNumber(raw.soldCount ?? raw.sold ?? raw.sales);
-  const rating = toNumber(raw.rating) || 4.5;
-  const review = toNumber(raw.reviewCount ?? raw.reviews);
-  const price = normalizePrice(raw.price);
-  const score = scoreProduct({ sold, rating, review, price });
+  // 1. Ambil Harga & Mata Uang
+  const priceStr = raw.product_price_info?.sale_price_decimal || "0";
+  const price = parseFloat(priceStr);
+  const currency = raw.product_price_info?.currency_name || "IDR";
+  
+  // 2. Ambil Statistik
+  const rating = raw.rate_info?.score || 0;
+  const review = toNumber(raw.rate_info?.review_count);
+  const sold = toNumber(raw.sold_info?.sold_count);
+  
+  // 3. Skor Produk (Logika disesuaikan karena harga bisa USD/IDR)
+  const soldScore = Math.min(40, Math.log10(sold + 1) * 10);
+  const ratingScore = Math.min(30, (rating / 5) * 30);
+  const reviewScore = Math.min(20, Math.log10(review + 1) * 5);
+  const priceScore = price > 0 ? 10 : 5;
+  const score = Math.round(soldScore + ratingScore + reviewScore + priceScore);
 
+  // 4. Alasan & Risiko
   const reasons: string[] = [];
   const risks: string[] = [];
 
   if (sold > 0) reasons.push(`Terjual ${sold.toLocaleString("id-ID")}+ unit`);
   if (rating >= 4.5) reasons.push(`Rating tinggi ${rating.toFixed(1)}/5`);
   if (review > 0) reasons.push(`${review.toLocaleString("id-ID")} ulasan`);
-  if (price > 0 && price < 150000) reasons.push("Harga impulse buy (< Rp 150rb)");
+  if (price > 0 && price < 150000) reasons.push("Harga impulse buy");
 
   if (sold < 50) risks.push("Volume penjualan masih rendah");
   if (review < 20) risks.push("Ulasan sedikit — validasi pasar belum kuat");
   if (rating < 4.2) risks.push("Rating di bawah rata-rata");
   if (price >= 500000) risks.push("Harga tinggi — konversi bisa lebih lambat");
+  
   if (reasons.length === 0) reasons.push("Sinyal awal dari pencarian keyword");
+  if (risks.length === 0) risks.push("Validasi supplier sebelum stok besar");
 
-  const image =
-    raw.images?.[0]?.url ||
-    raw.images?.[0] ||
-    raw.image ||
-    raw.cover ||
-    undefined;
+  // 5. Ekstrak Gambar, Seller, Link
+  const imageUrl = raw.image?.url_list?.[0] || raw.transparent_image?.url_list?.[0];
+  const sellerName = raw.seller_info?.shop_name;
+  const brandName = raw.brand_info?.brand_name;
+  const productUrl = raw.seo_url?.canonical_url || (raw.product_id ? `https://shop.tiktok.com/view/product/${raw.product_id}` : undefined);
 
   return {
-    id: raw.productId || raw.id || `prod-${index}`,
-    name: raw.title || raw.productName || "Produk TikTok Shop",
+    id: raw.product_id || `prod-${index}`,
+    name: raw.title || "Produk TikTok Shop",
     emoji: "📦",
-    price,
-    score,
-    confidence: confidenceFromScore(score),
+    price: price,
+    score: score > 100 ? 100 : score,
+    confidence: score >= 75 ? "high" : score >= 60 ? "medium" : "low",
     reasons: reasons.slice(0, 3),
-    risks: risks.length ? risks.slice(0, 2) : ["Validasi supplier sebelum stok besar"],
+    risks: risks.slice(0, 2),
     margin: 25,
     sellers: 1,
-    velocity: sold > 0 ? Math.min(3, sold / 100) : 1,
-    image: typeof image === "string" ? image : undefined,
-    seller: raw.sellerName || raw.shopName || raw.shop?.name || undefined,
-    url: raw.url || raw.productUrl || undefined,
+    velocity: sold > 0 ? Math.min(3, sold / 1000) : 1,
+    image: imageUrl,
+    seller: sellerName ? `${sellerName} ${brandName ? `(${brandName})` : ""}` : undefined,
+    url: productUrl,
   };
 }
 
@@ -92,66 +87,48 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Query wajib diisi" }, { status: 400 });
     }
 
-    // 1. Cek Cache
+    // 1. Ambil data (cache / apify)
+    let result: FunnelResult;
     const cached = await getCached(query, region);
+
     if (cached) {
-      return NextResponse.json({ ...cached, cached: true });
+      result = cached;
+    } else {
+      const raw = await fetchTikTokProducts(query, region, 100);
+      const stage1 = raw.length;
+      
+      // 2. Filter ringan
+      const filtered = raw.filter((p: any) => {
+        const sold = toNumber(p.sold_info?.sold_count);
+        const rating = p.rate_info?.score || 0;
+        return sold >= 10 && rating >= 4.0;
+      });
+      
+      const stage2List = filtered.length >= 3 ? filtered : raw;
+      const stage2 = stage2List.length;
+      
+      // 3. Map & Skor
+      const scored = stage2List.map((p: any, i: number) => mapToProduct(p, i)).sort((a: any, b: any) => b.score - a.score);
+      const top3 = scored.slice(0, 3);
+      
+      const insights = generateInsights(top3);
+      result = { query, stage1, stage2, stage3: Math.min(10, scored.length), stage4: top3.length, products: top3, insights };
+      
+      await setCached(query, region, result);
     }
 
-    // 2. Ambil data Apify
-    const raw = await fetchTikTokProducts(query, region, 100);
-    const stage1 = raw.length;
-
-    // 3. Filter
-    const filtered = raw.filter((p) => {
-      const sold = toNumber(p.soldCount ?? p.sold);
-      const rating = toNumber(p.rating);
-      const review = toNumber(p.reviewCount ?? p.reviews);
-      return sold >= 10 && rating >= 4.2 && review >= 20;
-    });
-
-    const stage2List = filtered.length >= 3 ? filtered : raw.slice(0, 50);
-    const stage2 = stage2List.length;
-
-    // 4. Skor
-    const scored = stage2List
-      .map((p, i) => mapToProduct(p, i))
-      .sort((a, b) => b.score - a.score);
-
-    const stage3 = Math.min(10, scored.length);
-    const top10 = scored.slice(0, stage3);
-    const top3 = top10.slice(0, 3);
-    const stage4 = top3.length;
-
-    // 5. Insights & Build Result
-    const insights = generateInsights(top3);
-    const result: FunnelResult = { query, stage1, stage2, stage3, stage4, products: top3, insights };
-
-    // 6. Save Cache
-    await setCached(query, region, result);
-
-    // 7. Save to Supabase & attach recommendation IDs
+    // 4. Simpan ke Supabase
     if (supabase) {
-      const { data: searchData } = await supabase
-        .from("searches")
-        .insert({ query, region })
-        .select("id")
-        .single();
-
+      const { data: searchData } = await supabase.from("searches").insert({ query, region }).select("id").single();
       if (searchData?.id) {
-        const recs = top3.map((p) => ({
+        const recs = result.products.map((p) => ({
           search_id: searchData.id,
           product_id: p.id,
           product_name: p.name,
           score: p.score,
         }));
-
-        const { data: insertedRecs } = await supabase
-          .from("recommendations")
-          .insert(recs)
-          .select("id, product_id");
-
-        // Tempelkan rec_id ke masing-masing produk
+        const { data: insertedRecs } = await supabase.from("recommendations").insert(recs).select("id, product_id");
+        
         if (insertedRecs) {
           result.products = result.products.map((p) => {
             const rec = insertedRecs.find((r: any) => r.product_id === p.id);
@@ -163,10 +140,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json(result);
   } catch (err: any) {
-    console.error("Apify error:", err);
-    return NextResponse.json(
-      { error: err?.message || "Gagal mengambil data TikTok Shop" },
-      { status: 500 }
-    );
+    console.error("Analyze error:", err);
+    return NextResponse.json({ error: err?.message || "Gagal" }, { status: 500 });
   }
 }

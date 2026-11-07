@@ -1,4 +1,4 @@
-node -e 'const fs=require("fs");const c=`import { NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { ApifyClient } from "apify-client";
 
 export const runtime = "nodejs";
@@ -32,4 +32,3 @@ export async function GET() {
 
   return NextResponse.json(result);
 }
-`;fs.writeFileSync("app/api/debug/route.ts",c);console.log("✓ fixed:",c.split("\n").length,"lines")'

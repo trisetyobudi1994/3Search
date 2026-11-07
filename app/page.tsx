@@ -6,6 +6,7 @@ import { Radar, ArrowLeft, Sparkles, Github } from "lucide-react";
 import SearchBar from "@/components/SearchBar";
 import FunnelAnimation from "@/components/FunnelAnimation";
 import ProductCard from "@/components/ProductCard";
+import WarRoom from "@/components/WarRoom";
 import { analyze } from "@/lib/funnel";
 import type { FunnelResult } from "@/lib/types";
 
@@ -187,6 +188,12 @@ export default function Home() {
                   stage4={result.stage4}
                 />
               </div>
+
+              {result.insights && (
+                <div className="mb-10">
+                  <WarRoom insights={result.insights} />
+                </div>
+              )}
 
               <div className="mb-4 flex items-center justify-between">
                 <h2 className="text-lg font-semibold text-zinc-900">3 Kandidat Terkuat</h2>

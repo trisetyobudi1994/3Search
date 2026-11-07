@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { fetchTikTokProducts } from "@/lib/apify";
+import { generateInsights } from "@/lib/insights";
 import type { Product, FunnelResult } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -101,7 +102,8 @@ export async function POST(req: NextRequest) {
     const top3 = top10.slice(0, 3);
     const stage4 = top3.length;
 
-    const result: FunnelResult = { query, stage1, stage2, stage3, stage4, products: top3 };
+    const insights = generateInsights(top3);
+    const result: FunnelResult = { query, stage1, stage2, stage3, stage4, products: top3, insights };
     return NextResponse.json(result);
   } catch (err: any) {
     console.error("Apify error:", err);

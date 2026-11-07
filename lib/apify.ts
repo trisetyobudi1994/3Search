@@ -12,11 +12,8 @@ export async function fetchTikTokProducts(
     throw new Error("APIFY_TOKEN belum diset di .env.local");
   }
   
-  const input = { 
-    keyword, 
-    country: region, // Gunakan country, bukan region, untuk actor ini
-    maxItems 
-  };
+  // HANYA kirim keyword, sesuai yang berhasil di /api/debug/run
+  const input = { keyword };
   
   const run = await client.actor(ACTOR_ID).call(input);
   const { items } = await client

@@ -42,7 +42,9 @@ export default function Home() {
       const data = await analyze(q);
       setResult(data);
       setTimeout(() => setPhase("result"), 1800);
-    } catch {
+    } catch (err: any) {
+      // Tampilkan error asli jika API gagal / data kosong
+      alert("Gagal mengambil data: " + err.message);
       setPhase("landing");
     }
   };
@@ -130,7 +132,7 @@ export default function Home() {
                 <SearchBar onSearch={handleSearch} />
                 <div className="mt-4 flex flex-wrap items-center justify-center gap-2 text-xs text-zinc-500">
                   <span>Coba cepat:</span>
-                  {["skincare lokal", "gadget", "fashion"].map((q) => (
+                  {["serum", "skincare", "fashion"].map((q) => (
                     <button
                       key={q}
                       onClick={() => handleSearch(q)}
@@ -144,7 +146,7 @@ export default function Home() {
             </motion.section>
           )}
 
-          {phase === "analyzing" && result && (
+          {phase === "analyzing" && (
             <motion.section
               key="analyzing"
               initial={{ opacity: 0 }}
@@ -156,17 +158,9 @@ export default function Home() {
                 <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl gradient-bg shadow-3d-glow">
                   <Radar className="h-6 w-6 animate-spin text-white" />
                 </div>
-                <p className="text-sm text-zinc-500">Menganalisis</p>
-                <p className="mt-1 text-lg font-semibold text-zinc-900">
-                  &quot;{result.query}&quot;
-                </p>
+                <p className="text-sm text-zinc-500">Menganalisis pasar TikTok...</p>
+                <p className="mt-1 text-xs text-zinc-400">Mohon tunggu 10-20 detik</p>
               </div>
-              <FunnelAnimation
-                stage1={result.stage1}
-                stage2={result.stage2}
-                stage3={result.stage3}
-                stage4={result.stage4}
-              />
             </motion.section>
           )}
 

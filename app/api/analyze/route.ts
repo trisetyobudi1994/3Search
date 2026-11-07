@@ -130,20 +130,35 @@ export async function POST(req: NextRequest) {
     // 6. Save Cache
     await setCached(query, region, result);
 
-    // 7. Save to Supabase (fire and forget)
+    // 7. Save to Supabase & attach recommendation IDs
     if (supabase) {
-      supabase.from("searches").insert({ query, region }).select("id").single()
-        .then(({ data: searchData }) => {
-          if (searchData?.id) {
-            const recs = top3.map((p) => ({
-              search_id: searchData.id,
-              product_id: p.id,
-              product_name: p.name,
-              score: p.score,
-            }));
-            supabase.from("recommendations").insert(recs).then();
-          }
-        });
+      const { data: searchData } = await supabase
+        .from("searches")
+        .insert({ query, region })
+        .select("id")
+        .single();
+
+      if (searchData?.id) {
+        const recs = top3.map((p) => ({
+          search_id: searchData.id,
+          product_id: p.id,
+          product_name: p.name,
+          score: p.score,
+        }));
+
+        const { data: insertedRecs } = await supabase
+          .from("recommendations")
+          .insert(recs)
+          .select("id, product_id");
+
+        // Tempelkan rec_id ke masing-masing produk
+        if (insertedRecs) {
+          result.products = result.products.map((p) => {
+            const rec = insertedRecs.find((r: any) => r.product_id === p.id);
+            return { ...p, rec_id: rec?.id };
+          });
+        }
+      }
     }
 
     return NextResponse.json(result);

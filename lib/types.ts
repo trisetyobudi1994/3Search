@@ -12,6 +12,32 @@ export interface Product {
   margin: number;
   sellers: number;
   velocity: number;
+  image?: string;
+  seller?: string;
+  url?: string;
+  rec_id?: string; // <-- Tambahan untuk learning loop
+}
+
+export interface BrandShare {
+  brand: string;
+  count: number;
+  percent: number;
+  avgRating: number;
+}
+
+export interface Insights {
+  opportunityScore: number;
+  opportunityLabel: "PELUANG BAGUS" | "NETRAL" | "HATI-HATI";
+  opportunityColor: "green" | "amber" | "red";
+  opportunityReason: string;
+  totalProducts: number;
+  totalSellers: number;
+  avgPrice: number;
+  priceRange: { min: number; max: number };
+  saturationLevel: number;
+  saturationLabel: string;
+  brands: BrandShare[];
+  playbook: { title: string; detail: string; type: "do" | "dont" | "info" }[];
 }
 
 export interface FunnelResult {
@@ -21,4 +47,5 @@ export interface FunnelResult {
   stage3: number;
   stage4: number;
   products: Product[];
+  insights?: Insights;
 }

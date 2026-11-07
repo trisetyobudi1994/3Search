@@ -1,7 +1,7 @@
 import { ApifyClient } from "apify-client";
 
 const client = new ApifyClient({ token: process.env.APIFY_TOKEN });
-const ACTOR_ID = process.env.APIFY_ACTOR || "pratikdani/tiktok-shop-scraper";
+const ACTOR_ID = process.env.APIFY_ACTOR || "toolzerhub/tiktok-shop-search-scraper";
 
 export async function fetchTikTokProducts(
   keyword: string,
@@ -12,10 +12,10 @@ export async function fetchTikTokProducts(
     throw new Error("APIFY_TOKEN belum diset");
   }
   
-  // Schema untuk pratikdani biasanya: keyword, country, maxItems
+  // Actor ini menerima keyword dan region (ID, US, dll)
   const input = { 
     keyword: keyword, 
-    country: region, 
+    region: region, 
     maxItems: maxItems 
   };
   

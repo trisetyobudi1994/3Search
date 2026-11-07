@@ -8,6 +8,7 @@
     "start": "next start"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.119.0",
     "@upstash/redis": "^1.41.0",
     "apify-client": "^2.25.0",
     "framer-motion": "^11.11.0",

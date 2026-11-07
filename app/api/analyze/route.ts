@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { fetchTikTokProducts } from "@/lib/apify";
 import { generateInsights } from "@/lib/insights";
 import { getCached, setCached } from "@/lib/cache";
+import { supabase } from "@/lib/supabase";
 import type { Product, FunnelResult } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -56,6 +57,13 @@ function mapToProduct(raw: any, index: number): Product {
   if (price >= 500000) risks.push("Harga tinggi — konversi bisa lebih lambat");
   if (reasons.length === 0) reasons.push("Sinyal awal dari pencarian keyword");
 
+  const image =
+    raw.images?.[0]?.url ||
+    raw.images?.[0] ||
+    raw.image ||
+    raw.cover ||
+    undefined;
+
   return {
     id: raw.productId || raw.id || `prod-${index}`,
     name: raw.title || raw.productName || "Produk TikTok Shop",
@@ -68,6 +76,9 @@ function mapToProduct(raw: any, index: number): Product {
     margin: 25,
     sellers: 1,
     velocity: sold > 0 ? Math.min(3, sold / 100) : 1,
+    image: typeof image === "string" ? image : undefined,
+    seller: raw.sellerName || raw.shopName || raw.shop?.name || undefined,
+    url: raw.url || raw.productUrl || undefined,
   };
 }
 
@@ -81,14 +92,17 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Query wajib diisi" }, { status: 400 });
     }
 
+    // 1. Cek Cache
     const cached = await getCached(query, region);
     if (cached) {
       return NextResponse.json({ ...cached, cached: true });
     }
 
+    // 2. Ambil data Apify
     const raw = await fetchTikTokProducts(query, region, 100);
     const stage1 = raw.length;
 
+    // 3. Filter
     const filtered = raw.filter((p) => {
       const sold = toNumber(p.soldCount ?? p.sold);
       const rating = toNumber(p.rating);
@@ -99,6 +113,7 @@ export async function POST(req: NextRequest) {
     const stage2List = filtered.length >= 3 ? filtered : raw.slice(0, 50);
     const stage2 = stage2List.length;
 
+    // 4. Skor
     const scored = stage2List
       .map((p, i) => mapToProduct(p, i))
       .sort((a, b) => b.score - a.score);
@@ -108,9 +123,29 @@ export async function POST(req: NextRequest) {
     const top3 = top10.slice(0, 3);
     const stage4 = top3.length;
 
+    // 5. Insights & Build Result
     const insights = generateInsights(top3);
     const result: FunnelResult = { query, stage1, stage2, stage3, stage4, products: top3, insights };
+
+    // 6. Save Cache
     await setCached(query, region, result);
+
+    // 7. Save to Supabase (fire and forget)
+    if (supabase) {
+      supabase.from("searches").insert({ query, region }).select("id").single()
+        .then(({ data: searchData }) => {
+          if (searchData?.id) {
+            const recs = top3.map((p) => ({
+              search_id: searchData.id,
+              product_id: p.id,
+              product_name: p.name,
+              score: p.score,
+            }));
+            supabase.from("recommendations").insert(recs).then();
+          }
+        });
+    }
+
     return NextResponse.json(result);
   } catch (err: any) {
     console.error("Apify error:", err);

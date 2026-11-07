@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { fetchTikTokProducts } from "@/lib/apify";
 import { generateInsights } from "@/lib/insights";
+import { getCached, setCached } from "@/lib/cache";
 import type { Product, FunnelResult } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -80,6 +81,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Query wajib diisi" }, { status: 400 });
     }
 
+    const cached = await getCached(query, region);
+    if (cached) {
+      return NextResponse.json({ ...cached, cached: true });
+    }
+
     const raw = await fetchTikTokProducts(query, region, 100);
     const stage1 = raw.length;
 
@@ -104,6 +110,7 @@ export async function POST(req: NextRequest) {
 
     const insights = generateInsights(top3);
     const result: FunnelResult = { query, stage1, stage2, stage3, stage4, products: top3, insights };
+    await setCached(query, region, result);
     return NextResponse.json(result);
   } catch (err: any) {
     console.error("Apify error:", err);

@@ -8,6 +8,7 @@
     "start": "next start"
   },
   "dependencies": {
+    "@upstash/redis": "^1.41.0",
     "apify-client": "^2.25.0",
     "framer-motion": "^11.11.0",
     "lucide-react": "^0.400.0",

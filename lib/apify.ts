@@ -1,29 +1,33 @@
 import { ApifyClient } from "apify-client";
 
-// Actor yang field output-nya cocok dengan mapToProduct() di app/api/analyze/route.ts
-export const ACTOR_ID = process.env.APIFY_ACTOR || "herus13/tiktok-shop-scraper";
+const client = new ApifyClient({ token: process.env.APIFY_TOKEN });
+const ACTOR_ID = process.env.APIFY_ACTOR || "sian.agency/tiktok-shop-scraper";
 
 export async function fetchTikTokProducts(
   keyword: string,
   region = "ID",
   maxItems = 100
 ): Promise<any[]> {
-  const token = process.env.APIFY_TOKEN;
-  if (!token) throw new Error("APIFY_TOKEN belum diset di environment variables");
+  if (!process.env.APIFY_TOKEN) throw new Error("APIFY_TOKEN belum diset.");
 
-  const client = new ApifyClient({ token });
-  const input = { keyword, region, maxItems };
-
-  // waitSecs: berapa lama kita menunggu (harus < maxDuration route = 60s)
-  // timeout : batas waktu run actor di sisi Apify (detik)
-  const run = await client.actor(ACTOR_ID).call(input, { waitSecs: 50, timeout: 55 });
-
-  if (run.status !== "SUCCEEDED") {
-    throw new Error(
-      `Apify belum selesai/gagal (status: ${run.status}). Coba lagi dalam beberapa detik.`
-    );
+  // Schema untuk sian.agency: keyword dan region
+  const input = { 
+    keyword: keyword, 
+    region: region, 
+    maxItems: maxItems 
+  };
+  
+  const run = await client.actor(ACTOR_ID).call(input, { timeout: 60 });
+  
+  if (run.status !== 'SUCCEEDED') {
+    throw new Error(`Apify gagal dengan status: ${run.status}`);
   }
 
   const { items } = await client.dataset(run.defaultDatasetId).listItems({ limit: maxItems });
+  
+  if (items.length === 0) {
+    throw new Error("TikTok Shop tidak mengembalikan produk untuk keyword ini. Coba keyword lain (misal: serum, dress, skincare).");
+  }
+
   return items;
 }

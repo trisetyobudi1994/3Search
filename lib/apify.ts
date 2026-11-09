@@ -1,7 +1,7 @@
 import { ApifyClient } from "apify-client";
 
 const client = new ApifyClient({ token: process.env.APIFY_TOKEN });
-const ACTOR_ID = process.env.APIFY_ACTOR || "sian.agency/tiktok-shop-scraper";
+const ACTOR_ID = process.env.APIFY_ACTOR || "abotapi/tiktok-shop-scraper";
 
 export async function fetchTikTokProducts(
   keyword: string,
@@ -10,11 +10,16 @@ export async function fetchTikTokProducts(
 ): Promise<any[]> {
   if (!process.env.APIFY_TOKEN) throw new Error("APIFY_TOKEN belum diset.");
 
-  // Schema untuk sian.agency: keyword dan region
+  // Schema khusus untuk actor abotapi/tiktok-shop-scraper
   const input = { 
-    keyword: keyword, 
-    region: region, 
-    maxItems: maxItems 
+    mode: "search",         // Mode pencarian
+    queries: [keyword],     // Kata kunci dalam bentuk array
+    maxItems: maxItems,
+    proxy: {
+      useApifyProxy: true,
+      apifyProxyGroups: ["RESIDENTIAL"],
+      apifyProxyCountry: region, // Paksa region ke ID (Indonesia)
+    }
   };
   
   const run = await client.actor(ACTOR_ID).call(input, { timeout: 60 });

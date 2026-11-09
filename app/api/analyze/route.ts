@@ -14,13 +14,13 @@ function toNumber(v: any): number {
   return 0;
 }
 
-// FUNGSI MAPPER UNTUK ACTOR SIAN.AGENCY
+// FUNGSI MAPPER UNTUK ACTOR ABOTAPI
 function mapToProduct(raw: any, index: number): Product {
-  // Ekstraksi harga dan statistik
-  const price = toNumber(raw.price || raw.sale_price || 0);
+  // Ekstraksi harga dan statistik sesuai output schema abotapi
+  const price = toNumber(raw.price || 0);
   const rating = raw.rating || 0;
-  const review = toNumber(raw.review_count || raw.reviewCount);
-  const sold = toNumber(raw.sold_count || raw.sold);
+  const review = toNumber(raw.reviewCount);
+  const sold = toNumber(raw.soldCount);
   
   // Skor
   const soldScore = Math.min(40, Math.log10(sold + 1) * 10);
@@ -28,13 +28,13 @@ function mapToProduct(raw: any, index: number): Product {
   const reviewScore = Math.min(20, Math.log10(review + 1) * 5);
   const score = Math.round(soldScore + ratingScore + reviewScore + 10);
 
-  // Ekstraksi gambar dan link
-  const image = raw.image_url || raw.image || raw.main_image;
-  const url = raw.product_url || raw.url || (raw.product_id ? `https://www.tiktok.com/view/product/${raw.product_id}` : undefined);
+  // Ekstraksi gambar (berupa array) dan link
+  const image = raw.images?.[0]; 
+  const url = raw.url;
 
   return {
-    id: raw.product_id || raw.id || `prod-${index}`,
-    name: raw.title || raw.name || "Produk TikTok Shop",
+    id: raw.productId || `prod-${index}`,
+    name: raw.title || "Produk TikTok Shop",
     emoji: "📦",
     price: price,
     score: Math.min(score, 100),
@@ -49,7 +49,7 @@ function mapToProduct(raw: any, index: number): Product {
     sellers: 1,
     velocity: sold > 0 ? Math.min(3, sold / 1000) : 1,
     image: image,
-    seller: raw.seller_name || raw.seller || "Seller TikTok",
+    seller: raw.shopName || "Seller TikTok",
     url: url,
   };
 }

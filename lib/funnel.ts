@@ -1,30 +1,21 @@
 import type { FunnelResult } from "./types";
 
-/**
- * Helper sisi-client: memanggil API route /api/analyze.
- * (Sebelumnya file ini duplikat lib/apify.ts dan tidak mengekspor `analyze`,
- * sehingga page.tsx gagal jalan di production.)
- */
-export async function analyze(query: string, region = "ID"): Promise<FunnelResult> {
+export async function analyze(query: string): Promise<FunnelResult> {
   const res = await fetch("/api/analyze", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ query, region }),
+    body: JSON.stringify({ query, region: "ID" }),
   });
 
-  let data: any = null;
-  try {
-    data = await res.json();
-  } catch {
-    // Vercel bisa mengembalikan HTML saat timeout (504)
-    throw new Error(
-      res.status === 504
-        ? "Server timeout. Coba lagi sebentar atau pakai keyword lain."
-        : `Respons server tidak valid (HTTP ${res.status})`
-    );
+  const json = await res.json();
+
+  if (!res.ok || json.error) {
+    throw new Error(json.error || "Gagal terhubung ke server.");
   }
 
-  if (!res.ok) throw new Error(data?.error || `Gagal (HTTP ${res.status})`);
-  if (!data?.products?.length) throw new Error("Tidak ada produk ditemukan untuk keyword ini.");
-  return data as FunnelResult;
+  if (!json.products || json.products.length === 0) {
+    throw new Error("Tidak ada produk TikTok Shop yang ditemukan untuk kata kunci ini.");
+  }
+
+  return json as FunnelResult;
 }

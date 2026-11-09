@@ -10,10 +10,10 @@ export async function fetchTikTokProducts(
 ): Promise<any[]> {
   if (!process.env.APIFY_TOKEN) throw new Error("APIFY_TOKEN belum diset.");
 
-  // Schema yang benar sesuai dokumentasi herus13/tiktok-shop-scraper
+  // Schema yang sudah TERBUKTI BERHASIL
   const input = { 
-    search_terms: [keyword],  // Harus berupa array
-    region: region,           // "ID" untuk Indonesia
+    search_terms: [keyword], 
+    region: region,           
     max_results: maxItems 
   };
   

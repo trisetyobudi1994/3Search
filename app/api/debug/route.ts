@@ -1,34 +1,36 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { ApifyClient } from "apify-client";
-import { ACTOR_ID } from "@/lib/apify";
 
 export const runtime = "nodejs";
-export const maxDuration = 30;
+export const maxDuration = 60;
 
-// Hanya aktif jika DEBUG_KEY diset, akses: /api/debug?key=<DEBUG_KEY>
-export async function GET(req: NextRequest) {
-  const debugKey = process.env.DEBUG_KEY;
-  if (!debugKey || req.nextUrl.searchParams.get("key") !== debugKey) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
-  }
-
+export async function GET() {
   const token = process.env.APIFY_TOKEN;
-  const result: any = {
-    apifyTokenSet: !!token,
-    actor: ACTOR_ID,
-    supabaseSet: !!(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY),
-    redisSet: !!(process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN),
-  };
+  const actor = "rexreus/tiktok-shop-scraper";
 
-  if (token) {
-    try {
-      const info = await new ApifyClient({ token }).actor(ACTOR_ID).get();
-      result.actorExists = !!info;
-      result.actorName = info?.name;
-    } catch (err: any) {
-      result.actorExists = false;
-      result.actorError = err?.message;
-    }
+  if (!token) return NextResponse.json({ error: "Token tidak ditemukan" });
+
+  try {
+    const client = new ApifyClient({ token });
+
+    // Schema yang benar untuk rexreus: queries (array) & region (string)
+    const input = {
+      queries: ["serum"],
+      region: "ID",
+      maxItems: 5,
+    };
+
+    const run = await client.actor(actor).call(input, { timeout: 50 });
+    const { items } = await client.dataset(run.defaultDatasetId).listItems({ limit: 5 });
+
+    return NextResponse.json({
+      success: true,
+      actorUsed: actor,
+      runStatus: run.status,
+      itemCount: items.length,
+      firstItem: items[0] || null,
+    });
+  } catch (err: any) {
+    return NextResponse.json({ success: false, error: err?.message });
   }
-  return NextResponse.json(result);
 }

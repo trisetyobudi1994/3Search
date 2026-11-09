@@ -1,12 +1,12 @@
-/** @type {import("next").NextConfig} */
-const path = require("path");
+const devOrigin = process.env.NEXT_DEV_ORIGIN;
 
-module.exports = {
+/** @type {import("next").NextConfig} */
+const nextConfig = {
   reactStrictMode: true,
-  typescript: { ignoreBuildErrors: true },
-  eslint: { ignoreDuringBuilds: true },
-  webpack(config) {
-    config.resolve.alias["@"] = path.resolve(__dirname);
-    return config;
-  },
+  poweredByHeader: false,
+  // Next 16 memblokir resource dev dari origin lain. Set NEXT_DEV_ORIGIN
+  // (hostname saja) saat membuka dev server lewat tunnel/preview.
+  ...(devOrigin ? { allowedDevOrigins: [devOrigin] } : {}),
 };
+
+module.exports = nextConfig;

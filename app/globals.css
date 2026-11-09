@@ -7,22 +7,37 @@
   --fg: #0a0a0a;
   --accent-from: #7c3aed;
   --accent-to: #2563eb;
+  /* Tailwind memakai variabel ini untuk font-sans. Tanpa unduhan font,
+     halaman tetap ringan dan build tidak bergantung jaringan. */
+  --font-inter: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, "Noto Sans", sans-serif;
 }
 
-* { box-sizing: border-box; }
+* {
+  box-sizing: border-box;
+}
 
-html, body {
+html,
+body {
   background: var(--bg);
   color: var(--fg);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
-  overscroll-behavior: none;
 }
 
-::selection { background: #ddd6fe; color: #4c1d95; }
+body {
+  overscroll-behavior-y: none;
+}
 
-.perspective-1200 { perspective: 1200px; }
-.preserve-3d { transform-style: preserve-3d; }
+::selection {
+  background: #ddd6fe;
+  color: #4c1d95;
+}
+
+:focus-visible {
+  outline: 2px solid rgba(124, 58, 237, 0.55);
+  outline-offset: 2px;
+}
 
 .grain::after {
   content: "";
@@ -42,10 +57,38 @@ html, body {
   -webkit-text-fill-color: transparent;
 }
 
-.gradient-bg { background: linear-gradient(135deg, var(--accent-from), var(--accent-to)); }
+.gradient-bg {
+  background: linear-gradient(135deg, var(--accent-from), var(--accent-to));
+}
+
+.perspective-1200 {
+  perspective: 1200px;
+}
+
+.preserve-3d {
+  transform-style: preserve-3d;
+}
+
+/* Scrollbar tipis agar panel data tidak terasa berat. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #d4d4d8 transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: #d4d4d8;
+  border-radius: 9999px;
+}
 
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
+  *,
+  *::before,
+  *::after {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
   }

@@ -1,143 +1,213 @@
 import { NextRequest, NextResponse } from "next/server";
-import { fetchTikTokProducts } from "@/lib/apify";
-import { generateInsights } from "@/lib/insights";
+import { buildFunnel } from "@/lib/pipeline";
+import { buildDemoDataset } from "@/lib/demo";
+import {
+  fetchTikTokProducts,
+  isApifyConfigured,
+  ScraperError,
+} from "@/lib/apify";
 import { getCached, setCached } from "@/lib/cache";
-import { supabase } from "@/lib/supabase";
-import type { Product, FunnelResult } from "@/lib/types";
+import { getSupabase } from "@/lib/supabase";
+import { clientIp, rateLimit } from "@/lib/rate-limit";
+import { isRegionCode, DEFAULT_REGION } from "@/lib/regions";
+import type { FunnelResult, Product, RegionCode } from "@/lib/types";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-function toNumber(v: any): number {
-  if (typeof v === "number") return v;
-  if (typeof v === "string") {
-    const clean = v.replace(/[^\d.]/g, "");
-    return parseFloat(clean) || 0;
-  }
-  return 0;
-}
-
-// 👇 FUNGSI MAPPING DISESUAIKAN DENGAN ACTOR HERUS13 👇
-function mapToProduct(raw: any, index: number): Product {
-  // 1. Harga (bisa berupa angka atau string)
-  const price = typeof raw.price === 'number' ? raw.price : parseFloat(raw.price) || 0;
-  
-  // 2. Statistik
-  const rating = raw.rating || 0;
-  const review = toNumber(raw.review_count);
-  const sold = toNumber(raw.sold_count);
-  
-  // 3. Skor Produk
-  const soldScore = Math.min(40, Math.log10(sold + 1) * 10);
-  const ratingScore = Math.min(30, (rating / 5) * 30);
-  const reviewScore = Math.min(20, Math.log10(review + 1) * 5);
-  const priceScore = price > 0 ? 10 : 5;
-  const score = Math.round(soldScore + ratingScore + reviewScore + priceScore);
-
-  // 4. Alasan & Risiko
-  const reasons: string[] = [];
-  const risks: string[] = [];
-
-  if (sold > 0) reasons.push(`Terjual ${sold.toLocaleString("id-ID")}+ unit`);
-  if (rating >= 4.5) reasons.push(`Rating tinggi ${rating.toFixed(1)}/5`);
-  if (review > 0) reasons.push(`${review.toLocaleString("id-ID")} ulasan`);
-  if (price > 0 && price < 150000) reasons.push("Harga impulse buy");
-
-  if (sold < 50) risks.push("Volume penjualan masih rendah");
-  if (review < 20) risks.push("Ulasan sedikit — validasi pasar belum kuat");
-  if (rating < 4.2) risks.push("Rating di bawah rata-rata");
-  if (price >= 500000) risks.push("Harga tinggi — konversi bisa lebih lambat");
-  
-  if (reasons.length === 0) reasons.push("Sinyal awal dari pencarian keyword");
-  if (risks.length === 0) risks.push("Validasi supplier sebelum stok besar");
-
-  // 5. Ekstrak Gambar, Seller, Link (sesuai field actor herus13)
-  const imageUrl = raw.main_image || raw.image_urls?.[0];
-  const sellerName = raw.seller_name;
-  const productUrl = raw.product_url;
-
-  return {
-    id: raw.product_id || `prod-${index}`,
-    name: raw.title || "Produk TikTok Shop",
-    emoji: "📦",
-    price: price,
-    score: score > 100 ? 100 : score,
-    confidence: score >= 75 ? "high" : score >= 60 ? "medium" : "low",
-    reasons: reasons.slice(0, 3),
-    risks: risks.slice(0, 2),
-    margin: 25,
-    sellers: 1,
-    velocity: sold > 0 ? Math.min(3, sold / 1000) : 1,
-    image: imageUrl,
-    seller: sellerName,
-    url: productUrl,
-  };
-}
+const MAX_QUERY_LENGTH = 80;
+const WINDOW_MS = 10 * 60 * 1000;
 
 export async function POST(req: NextRequest) {
+  const startedAt = Date.now();
+
+  let body: unknown;
   try {
-    const body = await req.json();
-    const query: string = (body.query || "").toString().trim();
-    const region: string = (body.region || "ID").toString().toUpperCase();
+    body = await req.json();
+  } catch {
+    return NextResponse.json(
+      { error: "Body permintaan tidak valid.", code: "invalid_body" },
+      { status: 400 }
+    );
+  }
 
-    if (!query) {
-      return NextResponse.json({ error: "Query wajib diisi" }, { status: 400 });
-    }
+  const payload = (body ?? {}) as Record<string, unknown>;
+  const query = String(payload.query ?? "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, MAX_QUERY_LENGTH);
+  const regionRaw = String(payload.region ?? DEFAULT_REGION).toUpperCase();
+  const region: RegionCode = isRegionCode(regionRaw) ? regionRaw : DEFAULT_REGION;
 
-    // 1. Ambil data (cache / apify)
-    let result: FunnelResult;
-    const cached = await getCached(query, region);
+  if (query.length < 2) {
+    return NextResponse.json(
+      {
+        error: "Kata kunci terlalu pendek.",
+        hint: "Masukkan minimal 2 karakter, misalnya “serum niacinamide”.",
+        code: "invalid_query",
+      },
+      { status: 400 }
+    );
+  }
 
-    if (cached) {
-      result = cached;
-    } else {
-      const raw = await fetchTikTokProducts(query, region, 100);
-      const stage1 = raw.length;
-      
-      // 2. Filter ringan
-      const filtered = raw.filter((p: any) => {
-        const sold = toNumber(p.sold_count);
-        const rating = p.rating || 0;
-        return sold >= 10 && rating >= 4.0;
-      });
-      
-      const stage2List = filtered.length >= 3 ? filtered : raw;
-      const stage2 = stage2List.length;
-      
-      // 3. Map & Skor
-      const scored = stage2List.map((p: any, i: number) => mapToProduct(p, i)).sort((a: any, b: any) => b.score - a.score);
-      const top3 = scored.slice(0, 3);
-      
-      const insights = generateInsights(top3);
-      result = { query, stage1, stage2, stage3: Math.min(10, scored.length), stage4: top3.length, products: top3, insights };
-      
-      await setCached(query, region, result);
-    }
+  const live = isApifyConfigured();
+  const limit = live ? 20 : 120;
+  const limiter = rateLimit(`analyze:${clientIp(req.headers)}`, limit, WINDOW_MS);
 
-    // 4. Simpan ke Supabase
-    if (supabase) {
-      const { data: searchData } = await supabase.from("searches").insert({ query, region }).select("id").single();
-      if (searchData?.id) {
-        const recs = result.products.map((p) => ({
-          search_id: searchData.id,
-          product_id: p.id,
-          product_name: p.name,
-          score: p.score,
-        }));
-        const { data: insertedRecs } = await supabase.from("recommendations").insert(recs).select("id, product_id");
-        
-        if (insertedRecs) {
-          result.products = result.products.map((p) => {
-            const rec = insertedRecs.find((r: any) => r.product_id === p.id);
-            return { ...p, rec_id: rec?.id };
-          });
-        }
+  if (!limiter.ok) {
+    return NextResponse.json(
+      {
+        error: "Terlalu banyak permintaan analisis.",
+        hint: `Coba lagi dalam ${Math.ceil(limiter.retryAfterSeconds / 60)} menit.`,
+        code: "rate_limited",
+      },
+      {
+        status: 429,
+        headers: {
+          "Retry-After": String(limiter.retryAfterSeconds),
+          "Cache-Control": "no-store",
+        },
+      }
+    );
+  }
+
+  try {
+    // 1. Cache (hanya untuk data live agar dataset demo selalu segar).
+    if (live) {
+      const cached = await getCached(query, region);
+      if (cached) {
+        const result: FunnelResult = {
+          ...cached,
+          query,
+          region,
+          cached: true,
+          durationMs: Date.now() - startedAt,
+          warnings: Array.from(
+            new Set([
+              ...cached.warnings,
+              "Hasil diambil dari cache untuk menghemat kuota scraper.",
+            ])
+          ),
+        };
+        return NextResponse.json(result, {
+          headers: { "Cache-Control": "no-store" },
+        });
       }
     }
 
-    return NextResponse.json(result);
-  } catch (err: any) {
-    console.error("Analyze error:", err);
-    return NextResponse.json({ error: err?.message || "Gagal" }, { status: 500 });
+    const warnings: string[] = [];
+    let raw: unknown[] = [];
+    let mode: FunnelResult["mode"] = "demo";
+
+    if (live) {
+      try {
+        raw = await fetchTikTokProducts(query, region, 100);
+        mode = "live";
+      } catch (error) {
+        const scraperError =
+          error instanceof ScraperError
+            ? error
+            : new ScraperError("unknown", error instanceof Error ? error.message : "Gagal mengambil data.");
+        console.error(`Scraper gagal (${scraperError.code}):`, scraperError.message);
+        warnings.push(
+          `Sumber live gagal (${scraperError.code}). Hasil di bawah memakai dataset demo sementara.`
+        );
+        raw = buildDemoDataset(query, region);
+        mode = "demo";
+      }
+    } else {
+      raw = buildDemoDataset(query, region);
+    }
+
+    // 2. Pipeline: normalisasi → filter → skor → insight.
+    const result = buildFunnel(raw, {
+      query,
+      region,
+      mode,
+      startedAt,
+      extraWarnings: warnings,
+    });
+
+    // 3. Simpan ke database hanya untuk data live, agar statistik publik
+    //    tidak tercampur data simulasi. Cache ditulis lebih dulu dan tanpa
+    //    rec_id, supaya permintaan berikutnya tidak memanggil scraper lagi.
+    if (mode === "live") {
+      await setCached(query, region, result);
+      const persisted = await persistResult(result);
+      if (persisted) {
+        return NextResponse.json(persisted, {
+          headers: { "Cache-Control": "no-store" },
+        });
+      }
+    }
+
+    return NextResponse.json(result, {
+      headers: { "Cache-Control": "no-store" },
+    });
+  } catch (error) {
+    console.error("Analyze error:", error);
+    return NextResponse.json(
+      {
+        error: "Analisis gagal diproses.",
+        hint: "Coba lagi sebentar. Jika berulang, periksa konfigurasi scraper.",
+        code: "analyze_failed",
+      },
+      { status: 500, headers: { "Cache-Control": "no-store" } }
+    );
+  }
+}
+
+/**
+ * Menyimpan pencarian + rekomendasi lalu mengembalikan hasil dengan rec_id.
+ * Kegagalan database tidak boleh menggagalkan analisis.
+ */
+async function persistResult(result: FunnelResult): Promise<FunnelResult | null> {
+  const supabase = getSupabase();
+  if (!supabase) return null;
+
+  try {
+    const { data: search, error: searchError } = await supabase
+      .from("searches")
+      .insert({ query: result.query, region: result.region })
+      .select("id")
+      .single();
+
+    if (searchError || !search?.id) {
+      console.warn("Gagal menyimpan search:", searchError?.message);
+      return null;
+    }
+
+    const rows = result.products.map((product) => ({
+      search_id: search.id,
+      product_id: product.id,
+      product_name: product.name,
+      score: product.score,
+    }));
+
+    const { data: inserted, error: insertError } = await supabase
+      .from("recommendations")
+      .insert(rows)
+      .select("id, product_id");
+
+    if (insertError) {
+      console.warn("Gagal menyimpan rekomendasi:", insertError.message);
+      return result;
+    }
+
+    const byProduct = new Map<string, string>();
+    for (const row of (inserted ?? []) as { id: string; product_id: string }[]) {
+      byProduct.set(row.product_id, row.id);
+    }
+
+    const products: Product[] = result.products.map((product) => ({
+      ...product,
+      rec_id: byProduct.get(product.id),
+    }));
+
+    return { ...result, products };
+  } catch (error) {
+    console.warn("Persist error:", error);
+    return null;
   }
 }

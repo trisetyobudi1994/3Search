@@ -4,3 +4,7 @@ out
 .env*.local
 .DS_Store
 *.log
+*.tsbuildinfo
+/freebuff-sites-build/
+/.open-next/
+/.wrangler/

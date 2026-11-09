@@ -44,7 +44,7 @@ export default function ProductCard({ p, index }: { p: Product; index: number })
     if (!p.rec_id || feedback === "loading" || feedback !== "idle") return;
     setFeedback("loading");
     try {
-      await fetch("/api/feedback", {
+      await fetch("/api/analyze/feedback", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ rec_id: p.rec_id, status }),

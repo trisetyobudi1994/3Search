@@ -1,33 +1,30 @@
-import { ApifyClient } from "apify-client";
+import type { FunnelResult } from "./types";
 
-const client = new ApifyClient({ token: process.env.APIFY_TOKEN });
-const ACTOR_ID = process.env.APIFY_ACTOR || "herus13/tiktok-shop-scraper";
+/**
+ * Helper sisi-client: memanggil API route /api/analyze.
+ * (Sebelumnya file ini duplikat lib/apify.ts dan tidak mengekspor `analyze`,
+ * sehingga page.tsx gagal jalan di production.)
+ */
+export async function analyze(query: string, region = "ID"): Promise<FunnelResult> {
+  const res = await fetch("/api/analyze", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ query, region }),
+  });
 
-export async function fetchTikTokProducts(
-  keyword: string,
-  region = "ID",
-  maxItems = 100
-): Promise<any[]> {
-  if (!process.env.APIFY_TOKEN) {
-    throw new Error("APIFY_TOKEN belum diset");
+  let data: any = null;
+  try {
+    data = await res.json();
+  } catch {
+    // Vercel bisa mengembalikan HTML saat timeout (504)
+    throw new Error(
+      res.status === 504
+        ? "Server timeout. Coba lagi sebentar atau pakai keyword lain."
+        : `Respons server tidak valid (HTTP ${res.status})`
+    );
   }
-  
-  // Schema untuk herus13 biasanya: keyword, region, maxItems
-  const input = { 
-    keyword: keyword, 
-    region: region, 
-    maxItems: maxItems 
-  };
-  
-  const run = await client.actor(ACTOR_ID).call(input, { timeout: 50 });
-  
-  if (run.status !== 'SUCCEEDED') {
-    throw new Error(`Apify gagal: ${run.status}`);
-  }
 
-  const { items } = await client
-    .dataset(run.defaultDatasetId)
-    .listItems({ limit: maxItems });
-    
-  return items;
+  if (!res.ok) throw new Error(data?.error || `Gagal (HTTP ${res.status})`);
+  if (!data?.products?.length) throw new Error("Tidak ada produk ditemukan untuk keyword ini.");
+  return data as FunnelResult;
 }

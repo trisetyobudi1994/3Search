@@ -25,7 +25,8 @@ export function generateInsights(products: Product[]): Insights {
     brandMap.set(brand, entry);
   });
   const brands: BrandShare[] = Array.from(brandMap.entries()).map(([brand, data]) => ({ brand, count: data.count, percent: Math.round((data.count / totalProducts) * 100), avgRating: data.ratings.length ? Math.round((data.ratings.reduce((a, b) => a + b, 0) / data.ratings.length) * 10) / 10 : 0 })).sort((a, b) => b.count - a.count).slice(0, 5);
-  const totalSellers = products.reduce((a, p) => a + (p.sellers || 1), 0);
+  const sellerNames = new Set(products.map((p) => p.seller).filter(Boolean));
+  const totalSellers = sellerNames.size || products.length;
   const uniqueBrands = brandMap.size;
   const saturationLevel = Math.min(100, Math.round((Math.min(totalSellers, 100) / 100) * 50 + (uniqueBrands > 10 ? 30 : uniqueBrands * 3)));
   let saturationLabel = "Seimbang";

@@ -14,26 +14,23 @@ function toNumber(v: any): number {
   return 0;
 }
 
-// FUNGSI MAPPER UNTUK ACTOR ABOTAPI
+// FUNGSI MAPPER UNTUK ACTOR HERUS13
 function mapToProduct(raw: any, index: number): Product {
-  // Ekstraksi harga dan statistik sesuai output schema abotapi
   const price = toNumber(raw.price || 0);
   const rating = raw.rating || 0;
-  const review = toNumber(raw.reviewCount);
-  const sold = toNumber(raw.soldCount);
+  const review = toNumber(raw.review_count);
+  const sold = toNumber(raw.sold_count);
   
-  // Skor
   const soldScore = Math.min(40, Math.log10(sold + 1) * 10);
   const ratingScore = Math.min(30, (rating / 5) * 30);
   const reviewScore = Math.min(20, Math.log10(review + 1) * 5);
   const score = Math.round(soldScore + ratingScore + reviewScore + 10);
 
-  // Ekstraksi gambar (berupa array) dan link
-  const image = raw.images?.[0]; 
-  const url = raw.url;
+  const image = raw.main_image || raw.image_urls?.[0]; 
+  const url = raw.product_url;
 
   return {
-    id: raw.productId || `prod-${index}`,
+    id: raw.product_id || `prod-${index}`,
     name: raw.title || "Produk TikTok Shop",
     emoji: "📦",
     price: price,
@@ -49,7 +46,7 @@ function mapToProduct(raw: any, index: number): Product {
     sellers: 1,
     velocity: sold > 0 ? Math.min(3, sold / 1000) : 1,
     image: image,
-    seller: raw.shopName || "Seller TikTok",
+    seller: raw.seller_name || "Seller TikTok",
     url: url,
   };
 }

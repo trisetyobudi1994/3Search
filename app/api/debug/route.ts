@@ -6,18 +6,18 @@ export const maxDuration = 60;
 
 export async function GET() {
   const token = process.env.APIFY_TOKEN;
-  const actor = "rexreus/tiktok-shop-scraper";
+  const actor = "herus13/tiktok-shop-scraper";
 
-  if (!token) return NextResponse.json({ error: "Token tidak ditemukan" });
+  if (!token) return NextResponse.json({ success: false, error: "Token tidak ditemukan" });
 
   try {
     const client = new ApifyClient({ token });
 
-    // Schema yang benar untuk rexreus: queries (array) & region (string)
+    // Schema PERSIS sesuai dokumentasi resmi herus13
     const input = {
-      queries: ["serum"],
-      region: "ID",
-      maxItems: 5,
+      search_terms: ["serum"], // Harus array
+      region: "ID",            // Paksa Indonesia
+      max_results: 5,
     };
 
     const run = await client.actor(actor).call(input, { timeout: 50 });

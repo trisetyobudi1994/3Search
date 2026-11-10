@@ -108,6 +108,9 @@ export default function Home() {
         </button>
         
         <div className="flex items-center gap-3 sm:gap-4">
+          <Link href="/pricing" className="hidden sm:inline text-xs font-medium text-violet-600 hover:text-violet-800 transition-colors">
+            Harga
+          </Link>
           {user ? (
             <>
               <Link href="/history" className="hidden sm:flex items-center gap-1 text-xs text-zinc-600 hover:text-violet-600 font-medium">

@@ -3,6 +3,7 @@ import { fetchTikTokProducts } from "@/lib/apify";
 import { generateInsights } from "@/lib/insights";
 import { getCached, setCached } from "@/lib/cache";
 import { supabase, getAuthenticatedUser } from "@/lib/supabase";
+import { ratelimit } from "@/lib/ratelimit";
 import type { Product, FunnelResult } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -63,6 +64,18 @@ export async function POST(req: NextRequest) {
     const user = await getAuthenticatedUser(token);
     if (!user) {
       return NextResponse.json({ error: "Sesi login tidak valid. Silakan login ulang." }, { status: 401 });
+    }
+
+    // RATE LIMITING BERDASARKAN USER ID
+    if (ratelimit) {
+      const { success, remaining } = await ratelimit.limit(`search_${user.id}`);
+      if (!success) {
+        return NextResponse.json(
+          { error: "Kuota gratis Anda habis (5/hari). Silakan upgrade ke Pro untuk pencarian tanpa batas." },
+          { status: 429 }
+        );
+      }
+      console.log(`Sisa kuota User ${user.id}: ${remaining}`);
     }
 
     // 2. PROSES PENCARIAN

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence, useMotionValue, useSpring, useTransform } from "framer-motion";
-import { Radar, ArrowLeft, Sparkles, Github, LogOut } from "lucide-react";
+import { Radar, ArrowLeft, Sparkles, Github, LogOut, Download, Share2, History } from "lucide-react";
 import Link from "next/link";
 import SearchBar from "@/components/SearchBar";
 import FunnelAnimation from "@/components/FunnelAnimation";
@@ -19,11 +19,9 @@ export default function Home() {
   const [result, setResult] = useState<FunnelResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   
-  // State untuk Autentikasi
   const [user, setUser] = useState<any>(null);
   const [sessionToken, setSessionToken] = useState<string | null>(null);
 
-  // Efek 3D Parallax
   const mx = useMotionValue(0);
   const my = useMotionValue(0);
   const sx = useSpring(mx, { stiffness: 40, damping: 20 });
@@ -38,20 +36,16 @@ export default function Home() {
     return () => window.removeEventListener("mousemove", onMove);
   }, [mx, my]);
 
-  // Cek Sesi Login
   useEffect(() => {
     if (!supabase) return;
-    
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user || null);
       setSessionToken(session?.access_token || null);
     });
-
     const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user || null);
       setSessionToken(session?.access_token || null);
     });
-
     return () => authListener.subscription.unsubscribe();
   }, []);
 
@@ -60,7 +54,6 @@ export default function Home() {
       alert("Anda harus login untuk menggunakan fitur ini.");
       return;
     }
-    
     setPhase("analyzing");
     setError(null);
     try {
@@ -73,32 +66,39 @@ export default function Home() {
     }
   };
 
-  const reset = () => {
-    setPhase("landing");
-    setResult(null);
-    setError(null);
+  const exportCSV = () => {
+    if (!result) return;
+    const rows = [
+      ["Peringkat", "Nama Produk", "Harga", "Skor", "Seller", "Link Beli"],
+      ...result.products.map((p, i) => [i + 1, `"${p.name}"`, p.price, p.score, p.seller || "-", p.url || "-"])
+    ];
+    const csvContent = "data:text/csv;charset=utf-8," + rows.map(e => e.join(",")).join("\n");
+    const link = document.createElement("a");
+    link.href = encodeURI(csvContent);
+    link.download = `3Search_${result.query}.csv`;
+    link.click();
   };
 
-  const handleLogout = async () => {
-    await supabase?.auth.signOut();
-    reset();
+  const shareResult = () => {
+    if (navigator.share) {
+      navigator.share({ title: `3Search: Analisis "${result?.query}"`, text: `Cek 3 produk potensial dari pencarian "${result?.query}" di 3Search!`, url: window.location.href });
+    } else {
+      navigator.clipboard.writeText(window.location.href);
+      alert("Link disalin ke clipboard!");
+    }
   };
+
+  const reset = () => { setPhase("landing"); setResult(null); setError(null); };
+  const handleLogout = async () => { await supabase?.auth.signOut(); reset(); };
 
   return (
     <main className="grain relative min-h-screen overflow-hidden bg-[#fafafa]">
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_10%,rgba(124,58,237,0.10),transparent_45%),radial-gradient(circle_at_85%_20%,rgba(37,99,235,0.10),transparent_45%)]" />
-        <motion.div
-          style={{ x: useTransform(sx, [-1, 1], [-40, 40]), y: useTransform(sy, [-1, 1], [-30, 30]) }}
-          className="absolute -top-40 -left-40 h-[480px] w-[480px] rounded-full bg-violet-300/40 blur-[100px]"
-        />
-        <motion.div
-          style={{ x: useTransform(sx, [-1, 1], [30, -30]), y: useTransform(sy, [-1, 1], [20, -20]) }}
-          className="absolute -bottom-40 -right-40 h-[520px] w-[520px] rounded-full bg-blue-300/40 blur-[110px]"
-        />
+        <motion.div style={{ x: useTransform(sx, [-1, 1], [-40, 40]), y: useTransform(sy, [-1, 1], [-30, 30]) }} className="absolute -top-40 -left-40 h-[480px] w-[480px] rounded-full bg-violet-300/40 blur-[100px]" />
+        <motion.div style={{ x: useTransform(sx, [-1, 1], [30, -30]), y: useTransform(sy, [-1, 1], [20, -20]) }} className="absolute -bottom-40 -right-40 h-[520px] w-[520px] rounded-full bg-blue-300/40 blur-[110px]" />
       </div>
 
-      {/* NAVBAR */}
       <nav className="relative z-10 mx-auto flex max-w-6xl items-center justify-between px-4 sm:px-6 py-4">
         <button onClick={reset} className="flex items-center gap-2">
           <div className="flex h-7 w-7 sm:h-8 sm:w-8 items-center justify-center rounded-lg gradient-bg shadow-3d-glow">
@@ -110,11 +110,12 @@ export default function Home() {
         <div className="flex items-center gap-3 sm:gap-4">
           {user ? (
             <>
+              <Link href="/history" className="hidden sm:flex items-center gap-1 text-xs text-zinc-600 hover:text-violet-600 font-medium">
+                <History className="h-3.5 w-3.5" /> Riwayat
+              </Link>
+              <span className="hidden md:inline text-xs text-zinc-400">|</span>
               <span className="hidden sm:inline text-xs text-zinc-500 font-medium">{user.email}</span>
-              <button 
-                onClick={handleLogout} 
-                className="flex items-center gap-1 text-xs text-rose-500 hover:text-rose-700 font-medium"
-              >
+              <button onClick={handleLogout} className="flex items-center gap-1 text-xs text-rose-500 hover:text-rose-700 font-medium">
                 <LogOut className="h-3.5 w-3.5" /> Logout
               </button>
             </>
@@ -132,73 +133,33 @@ export default function Home() {
       <div className="relative z-10 mx-auto max-w-6xl px-4 sm:px-6">
         <AnimatePresence mode="wait">
           {phase === "landing" && (
-            <motion.section
-              key="landing"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0, y: -20 }}
-              transition={{ duration: 0.4 }}
-              className="flex min-h-[75vh] flex-col items-center justify-center pb-20 text-center"
-            >
-              {error && (
-                <div className="mb-6 flex items-center gap-2 rounded-xl bg-rose-50 px-4 py-2 text-sm text-rose-600 ring-1 ring-rose-200">
-                  {error}
-                </div>
-              )}
+            <motion.section key="landing" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, y: -20 }} transition={{ duration: 0.4 }} className="flex min-h-[75vh] flex-col items-center justify-center pb-20 text-center">
+              {error && <div className="mb-6 flex items-center gap-2 rounded-xl bg-rose-50 px-4 py-2 text-sm text-rose-600 ring-1 ring-rose-200">{error}</div>}
               
-              <motion.div
-                initial={{ opacity: 0, y: 24 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.7 }}
-              >
+              <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7 }}>
                 <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-white/60 bg-white/60 px-3 py-1 text-xs text-zinc-600 shadow-3d-sm backdrop-blur-xl">
-                  <Sparkles className="h-3 w-3 text-violet-600" />
-                  <span>Saring 100 produk → 3 kandidat terbaik</span>
+                  <Sparkles className="h-3 w-3 text-violet-600" /><span>Saring 100 produk → 3 kandidat terbaik</span>
                 </div>
                 <h1 className="mx-auto max-w-3xl text-3xl sm:text-4xl md:text-6xl font-bold tracking-tight text-zinc-900">
-                  Temukan <span className="gradient-text">produk potensial viral</span>
-                  <br className="hidden sm:block" /> sebelum semua orang tahu.
+                  Temukan <span className="gradient-text">produk potensial viral</span><br className="hidden sm:block" /> sebelum semua orang tahu.
                 </h1>
-                <p className="mx-auto mt-5 max-w-xl text-sm sm:text-base text-zinc-500 px-4">
-                  Berbasis data, transparan soal akurasi. Kami tidak jual mimpi — kami tunjukkan alasannya.
-                </p>
+                <p className="mx-auto mt-5 max-w-xl text-sm sm:text-base text-zinc-500 px-4">Berbasis data, transparan soal akurasi. Kami tidak jual mimpi.</p>
               </motion.div>
 
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.2, duration: 0.7 }}
-                className="mt-10 w-full"
-              >
-                {/* JIKA SUDAH LOGIN, TAMPILKAN SEARCH BAR. JIKA BELUM, TAMPILKAN TOMBOL LOGIN */}
-                {user ? (
-                  <SearchBar onSearch={handleSearch} />
-                ) : (
+              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2, duration: 0.7 }} className="mt-10 w-full">
+                {user ? <SearchBar onSearch={handleSearch} /> : (
                   <div className="mx-auto max-w-md rounded-3xl bg-white p-8 shadow-3d ring-1 ring-zinc-200 text-center">
-                    <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-violet-100 text-violet-600">
-                      <Radar className="h-6 w-6" />
-                    </div>
+                    <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-violet-100 text-violet-600"><Radar className="h-6 w-6" /></div>
                     <h3 className="text-lg font-bold text-zinc-900 mb-2">Akses Terbatas</h3>
-                    <p className="text-sm text-zinc-500 mb-6">
-                      Silakan login terlebih dahulu untuk mulai menganalisis pasar TikTok Shop secara mendalam.
-                    </p>
-                    <Link href="/login" className="inline-flex w-full items-center justify-center rounded-xl gradient-bg px-6 py-3 text-sm font-medium text-white shadow-3d-glow transition-all hover:brightness-110">
-                      Masuk ke 3Search
-                    </Link>
+                    <p className="text-sm text-zinc-500 mb-6">Silakan login terlebih dahulu untuk mulai menganalisis pasar TikTok Shop secara mendalam.</p>
+                    <Link href="/login" className="inline-flex w-full items-center justify-center rounded-xl gradient-bg px-6 py-3 text-sm font-medium text-white shadow-3d-glow transition-all hover:brightness-110">Masuk ke 3Search</Link>
                   </div>
                 )}
-                
                 {user && (
                   <div className="mt-4 flex flex-wrap items-center justify-center gap-2 text-xs text-zinc-500">
                     <span>Coba cepat:</span>
                     {["serum", "skincare", "dress", "iphone"].map((q) => (
-                      <button
-                        key={q}
-                        onClick={() => handleSearch(q)}
-                        className="rounded-full border border-white/70 bg-white/80 px-3 py-1 shadow-3d-sm backdrop-blur transition-all duration-300 hover:-translate-y-0.5 hover:text-violet-600 hover:shadow-3d"
-                      >
-                        {q}
-                      </button>
+                      <button key={q} onClick={() => handleSearch(q)} className="rounded-full border border-white/70 bg-white/80 px-3 py-1 shadow-3d-sm backdrop-blur transition-all duration-300 hover:-translate-y-0.5 hover:text-violet-600 hover:shadow-3d">{q}</button>
                     ))}
                   </div>
                 )}
@@ -207,17 +168,9 @@ export default function Home() {
           )}
 
           {phase === "analyzing" && (
-            <motion.section
-              key="analyzing"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="flex min-h-[70vh] flex-col items-center justify-center pb-20"
-            >
+            <motion.section key="analyzing" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex min-h-[70vh] flex-col items-center justify-center pb-20">
               <div className="mb-8 text-center">
-                <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl gradient-bg shadow-3d-glow">
-                  <Radar className="h-6 w-6 animate-spin text-white" />
-                </div>
+                <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl gradient-bg shadow-3d-glow"><Radar className="h-6 w-6 animate-spin text-white" /></div>
                 <p className="text-sm text-zinc-500">Menganalisis pasar TikTok...</p>
                 <p className="mt-1 text-xs text-zinc-400">Mohon tunggu 10-20 detik</p>
               </div>
@@ -225,53 +178,21 @@ export default function Home() {
           )}
 
           {phase === "result" && result && (
-            <motion.section
-              key="result"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="pb-24"
-            >
-              <div className="mb-8 flex items-center justify-between gap-4">
-                <button
-                  onClick={reset}
-                  className="flex items-center gap-1.5 text-sm text-zinc-500 hover:text-zinc-900"
-                >
-                  <ArrowLeft className="h-4 w-4" /> Analisis baru
-                </button>
-                <div className="text-xs text-zinc-500">
-                  Hasil untuk: <span className="font-medium text-zinc-900">&quot;{result.query}&quot;</span>
+            <motion.section key="result" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="pb-24">
+              <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
+                <button onClick={reset} className="flex items-center gap-1.5 text-sm text-zinc-500 hover:text-zinc-900"><ArrowLeft className="h-4 w-4" /> Analisis baru</button>
+                <div className="flex items-center gap-2">
+                  <button onClick={exportCSV} className="flex items-center gap-1.5 rounded-lg bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 shadow-sm ring-1 ring-zinc-200 hover:bg-zinc-50"><Download className="h-3.5 w-3.5" /> CSV</button>
+                  <button onClick={shareResult} className="flex items-center gap-1.5 rounded-lg bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 shadow-sm ring-1 ring-zinc-200 hover:bg-zinc-50"><Share2 className="h-3.5 w-3.5" /> Share</button>
                 </div>
               </div>
-
-              <div className="mb-10">
-                <FunnelAnimation
-                  stage1={result.stage1}
-                  stage2={result.stage2}
-                  stage3={result.stage3}
-                  stage4={result.stage4}
-                />
-              </div>
-
-              {result.insights && (
-                <div className="mb-10">
-                  <WarRoom insights={result.insights} />
-                </div>
-              )}
-
-              <div className="mb-4 flex items-center justify-between">
-                <h2 className="text-lg font-semibold text-zinc-900">3 Kandidat Terkuat</h2>
-                <span className="text-xs text-zinc-500">Diurutkan berdasarkan skor sinyal</span>
-              </div>
-
+              <div className="mb-10"><FunnelAnimation stage1={result.stage1} stage2={result.stage2} stage3={result.stage3} stage4={result.stage4} /></div>
+              {result.insights && <div className="mb-10"><WarRoom insights={result.insights} /></div>}
+              <div className="mb-4 flex items-center justify-between"><h2 className="text-lg font-semibold text-zinc-900">3 Kandidat Terkuat</h2></div>
               <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-                {result.products.map((p, i) => (
-                  <ProductCard key={p.id} p={p} index={i} />
-                ))}
+                {result.products.map((p, i) => <ProductCard key={p.id} p={p} index={i} />)}
               </div>
-
-              <p className="mt-8 rounded-2xl border border-white/60 bg-white/80 p-4 text-center text-xs leading-relaxed text-zinc-500 shadow-3d-sm backdrop-blur">
-                ⚠️ <strong className="text-zinc-700">Transparansi:</strong> Presisi historis top-3 kami ~58%. Dari 10 rekomendasi, ~4 bisa meleset — itu normal. Validasi stok & supplier sebelum keputusan besar.
-              </p>
+              <p className="mt-8 rounded-2xl border border-white/60 bg-white/80 p-4 text-center text-xs leading-relaxed text-zinc-500 shadow-3d-sm backdrop-blur">⚠️ <strong className="text-zinc-700">Transparansi:</strong> Presisi historis top-3 kami ~58%. Validasi stok & supplier sebelum keputusan besar.</p>
             </motion.section>
           )}
         </AnimatePresence>

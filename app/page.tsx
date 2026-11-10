@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence, useMotionValue, useSpring, useTransform } from "framer-motion";
-import { Radar, ArrowLeft, Sparkles, Github, LogOut, Download, Share2, History } from "lucide-react";
+import { Radar, ArrowLeft, Sparkles, LogOut, Download, Share2, History } from "lucide-react";
 import Link from "next/link";
 import SearchBar from "@/components/SearchBar";
 import FunnelAnimation from "@/components/FunnelAnimation";

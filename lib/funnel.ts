@@ -1,9 +1,12 @@
 import type { FunnelResult } from "./types";
 
-export async function analyze(query: string): Promise<FunnelResult> {
+export async function analyze(query: string, token: string): Promise<FunnelResult> {
   const res = await fetch("/api/analyze", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { 
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${token}` // Kirim token
+    },
     body: JSON.stringify({ query, region: "ID" }),
   });
 

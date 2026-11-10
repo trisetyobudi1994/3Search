@@ -1,7 +1,7 @@
 "use client";
 
 import { motion, useMotionValue, useSpring, useTransform } from "framer-motion";
-import { Check, AlertTriangle, TrendingUp, Users, Percent, ThumbsUp, ThumbsDown } from "lucide-react";
+import { Check, AlertTriangle, TrendingUp, Users, Percent, ThumbsUp, ThumbsDown, ShoppingCart, Search } from "lucide-react";
 import { useRef, useState, useEffect } from "react";
 import type { Product } from "@/lib/types";
 import ScoreRing from "./ScoreRing";
@@ -64,6 +64,9 @@ export default function ProductCard({ p, index }: { p: Product; index: number })
     }
   };
 
+  // Buat URL Pencarian TikTok berdasarkan judul produk
+  const tiktokSearchUrl = `https://www.tiktok.com/search?q=${encodeURIComponent(p.name)}`;
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 32, rotateX: -10 }}
@@ -79,7 +82,6 @@ export default function ProductCard({ p, index }: { p: Product; index: number })
         style={isMobile ? {} : { rotateX, rotateY, z: translateZ, transformStyle: "preserve-3d" }}
         className="group relative flex flex-col h-full rounded-3xl bg-white p-5 sm:p-6 shadow-3d ring-1 ring-zinc-200/60 transition-shadow duration-500 will-change-transform hover:shadow-3d-lg"
       >
-        {/* EFEK GLARE 3D */}
         {!isMobile && (
           <>
             <motion.div 
@@ -91,7 +93,6 @@ export default function ProductCard({ p, index }: { p: Product; index: number })
           </>
         )}
 
-        {/* KONTEN KARTU (TANPA POINTER-EVENTS-NONE AGAR TOMBOL BISA DIKLIK) */}
         <div style={isMobile ? {} : { transform: "translateZ(24px)" }} className="relative flex flex-col flex-grow z-10">
           
           <div className="flex items-start justify-between gap-3 sm:gap-4">
@@ -158,18 +159,32 @@ export default function ProductCard({ p, index }: { p: Product; index: number })
             ))}
           </div>
 
-          {/* AREA TOMBOL */}
+          {/* AREA TOMBOL: TIKTOK & TOKOPEDIA */}
           <div className="mt-auto relative z-30">
-            {p.url && (
+            
+            <div className="grid grid-cols-2 gap-2 mb-3">
+              {/* Tombol TikTok (Affiliate) */}
               <a
-                href={p.url}
+                href={tiktokSearchUrl}
                 target="_blank"
                 rel="noreferrer"
-                className="mb-3 flex items-center justify-center gap-1.5 rounded-xl gradient-bg px-3 py-2.5 text-xs font-medium text-white shadow-3d-glow transition-all hover:brightness-110"
+                className="flex items-center justify-center gap-1.5 rounded-xl bg-zinc-900 px-2 py-2.5 text-[10px] sm:text-xs font-medium text-white shadow-sm transition-all hover:bg-zinc-800"
               >
-                Buka di TikTok →
+                <Search className="h-3.5 w-3.5" /> Cari di TikTok
               </a>
-            )}
+
+              {/* Tombol Tokopedia (Beli) */}
+              {p.url && (
+                <a
+                  href={p.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-center justify-center gap-1.5 rounded-xl bg-emerald-500 px-2 py-2.5 text-[10px] sm:text-xs font-medium text-white shadow-sm transition-all hover:bg-emerald-600"
+                >
+                  <ShoppingCart className="h-3.5 w-3.5" /> Beli di Tokped
+                </a>
+              )}
+            </div>
 
             <div className="border-t border-zinc-100 pt-3 sm:pt-4">
               <div className="mb-2 text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
